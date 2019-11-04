@@ -1,0 +1,302 @@
+---
+title: 'An introduction to webscraping: locating Spanish schools'
+author: Jorge Cimentada
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r knitr-setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      fig.path = "../figs/",
+                      fig.align = "center",
+                      fig.asp = 0.618,
+                      out.width = "80%")
+```
+
+```{r }
+
+xml_test <- "<people> <jason>
+  <person type = 'fictional'>
+    <first_name>
+      <married>
+        Jason
+      </married>
+    </first_name>
+    <last_name>
+        Bourne
+    </last_name>
+    <occupation>
+      Spy
+    </occupation>
+  </person>
+</jason>
+<carol>
+  <person type = 'real'>
+    <first_name>
+      <married>
+        Carol
+      </married>
+    </first_name>
+    <last_name>
+        Kalp
+    </last_name>
+    <occupation>
+      Scientist
+    </occupation>
+  </person>
+</carol>
+</people>
+"
+
+
+
+xml_raw <- read_xml(xml_test)
+
+xml_structure(xml_raw)
+
+# Only for Jason
+xml_child(xml_raw)
+
+# But also Carol
+xml_child(xml_raw, search = 2)
+
+# Both
+child_xml <- xml_children(xml_raw)
+
+# We cannot get the attribute of the tag jason or carol.
+# We need to go down even further
+xml_attrs(child_xml, "type")
+
+# We go down one level of children and then
+# apply the attrs
+character_nodes <- xml_children(child_xml)
+xml_attrs(character_nodes, "type")
+
+xml_has_attr(character_nodes, "type")
+
+xml_path(character_nodes)
+
+# You can use results from xml_path like directories
+xml_find_all(xml_raw, "/people/jason/person")
+
+# Search for all 'man' nodes
+xml_find_all(xml_raw, "//married")
+
+# Search for specific attributes
+attr_nodes <- xml_find_all(xml_raw, "//person")
+xml_attr(attr_nodes, "type")
+
+# How do you filter nodesets which comply a specific
+# rule?
+
+# Give me all the nodes 'person' that have a type 'fictional'
+xml_raw %>%
+  xml_find_all("//person[@type='fictional']")
+
+# How to get the values?
+xml_raw %>%
+  xml_find_all("//married") %>%
+  xml_text()
+
+```
+
+Let's move on to a real example. We're interested 
+
+xpath cheatsheet: https://devhints.io/xpath
+
+```{r }
+library(tidyverse)
+library(xml2)
+
+school_url <- "https://www.buscocolegio.com/Colegio/detalles-colegio.action?id=3006839"
+
+school_raw <- read_html(school_url)
+
+xml_structure(school_raw)
+
+school_raw %>%
+  xml_child()
+
+# Let's extract the name first
+# insert school_name.png
+# get all <a> tags with that specific class
+name_xpath <- "//a[@class='u-link-v5 g-font-size-18 g-color-gray-dark-v1 g-color-primary--hover']"
+
+school_name <-
+  school_raw %>%
+  xml_find_all(name_xpath) %>%
+  xml_text()
+
+# How do we get data from the middle rectangle
+# insert main_rectangle.png
+data_rect <-
+  school_raw %>%
+  xml_find_all("//div[@class='row g-mx-0 g-mb-0']")
+
+# insert telephone_html.png
+data_rect %>%
+  xml_find_all("//span[@itemprop]")
+
+# We could try extracting all strong tags since
+# all of the info we need is in strong tags
+# but this is too imprecise
+
+school_email <-
+  data_rect %>%
+  xml_find_all("//span[@itemprop='email']") %>%
+  xml_text()
+
+school_email
+
+school_tel <-
+  data_rect %>%
+  xml_find_all("//span[@itemprop='tel']") %>%
+  xml_text()
+
+school_tel
+
+
+# Remember, it is not their duty to make it easy for you
+# You're grabbing other people's work which was not intended
+# for you to be easy.
+
+# All remaining elements are wrapped in strong.
+# Show strong_elements.png
+
+extra_information <-
+  data_rect %>%
+  xml_children() %>% 
+  xml_find_all("//strong[@class='g-font-size-11']") %>%
+  xml_text()
+
+# See names
+extra_information
+
+names(extra_information) <- c("website",
+                              "fax",
+                              "school_code",
+                              "public_private",
+                              "type_school",
+                              "owner")
+
+extra_information
+
+# Insert lat_lon_node.png
+location_str <-
+  school_raw %>%
+  xml_find_all("//p[@class='d-flex align-items-baseline g-mt-5']//a[@href]") %>%
+  xml_attr(attr = "href")
+
+location_str
+
+location <-
+  location_str %>%
+  str_extract_all("=.+$") %>%
+  str_replace_all("=|colegio\\.longitud", "") %>% 
+  str_split("&") %>%
+  .[[1]]
+
+
+complete_data <- data.frame(
+  school_name = school_name,
+  school_email = school_email,
+  # Collapse the telephone number in case there is more than one
+  school_tel = paste0(school_tel, collapse = ";"),
+  # Remember the vector with all extra information?
+  # Convert it to a data frame to be able to combine
+  # it with this information
+  do.call(data.frame, as.list(extra_information)),
+  lat = location[1],
+  lon = location[2]
+)
+
+complete_data
+
+```
+
+
+Turn it into a function
+```{r }
+
+if_empty <- function(x) if (length(x) == 0) "-" else x
+
+school_grabber <- function(school_url) {
+  school_raw <- read_html(school_url) %>% xml_child()
+
+  name_xpath <- "//a[@class='u-link-v5 g-font-size-18 g-color-gray-dark-v1 g-color-primary--hover']"
+
+  school_name <-
+    school_raw %>%
+    xml_find_all(name_xpath) %>%
+    xml_text()
+
+  data_rect <-
+    school_raw %>%
+    xml_find_all("//div[@class='row g-mx-0 g-mb-0']")
+
+  school_email <-
+    data_rect %>%
+    xml_find_all("//span[@itemprop='email']") %>%
+    xml_text() %>%
+    if_empty()
+
+  school_tel <-
+    data_rect %>%
+    xml_find_all("//span[@itemprop='tel']") %>%
+    xml_text() %>%
+    if_empty()
+
+  school_website <-
+    data_rect %>%
+    xml_find_all("//span[@itemprop='url']") %>%
+    xml_text() %>%
+    if_empty()
+
+  extra_info <-
+    data_rect %>%
+    xml_children() %>% 
+    xml_find_all("//strong[@class='g-font-size-11']") %>%
+    xml_text()
+
+  extra_info <- if (school_website == "-") extra_info[-1] else extra_info
+  
+  names(extra_info) <- c("fax",
+                         "school_code",
+                         "public_private",
+                         "type_school",
+                         "owner")
+
+  location_str <-
+    school_raw %>%
+    xml_find_all("//p[@class='d-flex align-items-baseline g-mt-5']//a[@href]") %>%
+    xml_attr(attr = "href")
+
+  location <-
+    location_str %>%
+    str_extract_all("=.+$") %>%
+    str_replace_all("=|colegio\\.longitud", "") %>% 
+    str_split("&") %>%
+    .[[1]]
+
+  complete_data <- data.frame(
+    name = school_name,
+    email = school_email,
+    website = school_website,
+    tel = paste0(school_tel, collapse = ";"),
+    do.call(data.frame, as.list(extra_info)),
+    lat = location[1],
+    lon = location[2]
+  )
+
+  complete_data
+}
+
+
+school_grabber("https://www.buscocolegio.com/Colegio/detalles-colegio.action?id=3006839")
+school_grabber("https://www.buscocolegio.com/Colegio/detalles-colegio.action?id=3015348")
+school_grabber("https://www.buscocolegio.com/Colegio/detalles-colegio.action?id=3010387")
+
+
+```
