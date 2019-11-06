@@ -1,9 +1,7 @@
 ---
 title: 'An introduction to webscraping: locating Spanish schools'
 authors: Jorge Cimentada
-date: 2020-02-11
-categories: ["R"]
-tags: ["R", "big data", "webscraping"]
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 ---
 
 ```{r knitr-setup, include=FALSE}
