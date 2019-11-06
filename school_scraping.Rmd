@@ -439,7 +439,7 @@ ggplot(sp_sf) +
 
 ```
 
-There we go! We went from literally no information at the beginning of this tutorial to interpretable and summarized information only using web data. We can see some schools in Madrid (center) as well in other regions of Spain, including Catalonia and Galicia. This marks an end to our scraping adventure but before we finish, I want to mention some of the ethical guidelines for webscraping. Scraping is extremely useful but we give headaches to other people maintaining our website of interest. Here's a list of ethical guidelines you should always follow:
+There we go! We went from literally no information at the beginning of this tutorial to interpretable and summarized information only using web data. We can see some schools in Madrid (center) as well in other regions of Spain, including Catalonia and Galicia. This marks the end of our scraping adventure but before we finish, I want to mention some of the ethical guidelines for webscraping. Scraping is extremely useful for us but can give headaches to other people maintaining the website of interest. Here's a list of ethical guidelines you should always follow:
 
 * Read the terms and services: many websites prohibit webscraping and you could be in a breach of privacy by scraping the data. [One](https://fortune.com/2016/05/18/okcupid-data-research/) famous example.
 
