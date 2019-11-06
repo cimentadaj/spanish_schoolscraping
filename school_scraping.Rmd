@@ -1,8 +1,9 @@
 ---
 title: 'An introduction to webscraping: locating Spanish schools'
-author: Jorge Cimentada
-date: "`r format(Sys.time(), '%d %B, %Y')`"
-output: html_document
+authors: Jorge Cimentada
+date: 2020-02-11
+categories: ["R"]
+tags: ["R", "big data", "webscraping"]
 ---
 
 ```{r knitr-setup, include=FALSE}
@@ -25,9 +26,20 @@ In this tutorial I'll be guiding you through the basics of web scraping using R 
 
 # Basic steps
 
-For web scraping in `R`, you can fulfill almost all of your needs with the `xml2` and `httr` package. As you wander through the web, you'll see many examples using the `rvest` package. `xml2` and `rvest` are very similar so don't feel you're lacking behind for learning one and not the other.
+For web scraping in `R`, you can fulfill almost all of your needs with the `xml2` and `httr` package. As you wander through the web, you'll see many examples using the `rvest` package. `xml2` and `rvest` are very similar so don't feel you're lacking behind for learning one and not the other. In addittion to these two packages, we'll need some others for plotting locations on a map (`ggplot2`, `sf`, `rnaturalearth`) and wrangling data (`tidyverse`). 
 
-In addittion to these two packages, we'll need some others for plotting locations on a map (`ggplot2`, `sf`, `rnaturalearth`) and wrangling data (`tidyverse`). Let's load all of them:
+The final package used in the real world example is `scrapex`. In the real world example, we'll be scraping data from the website `www.buscocolegio.com` to locate a sample of schools in Spain. However, throughout the tutorial we won't be scraping the data directly from their real website. What would happen to this tutorial if 6 months from now `www.buscocolegio.com` updates the design of the website? Everything from our real world example would be lost. 
+
+Scraping tutorials are usually very unstable precisely because of this. To circumvent that problem, I've saved a random sample of websites from some schools in `www.buscocolegio.com` into an R package called `scrapex`. Althought the links we'll be working on will be hosted locally on your machine, the HTML of the website is identical to the one hosted on the website. 
+
+You can install the package with:
+
+```{r, eval = FALSE}
+# install.packages("devtools")
+devtools::install_github("cimentadaj/scrapex")
+```
+
+If you see a lot of warnings during the installation, it is expected. It is related to the package being too big for normal CRAN standards. Let's load all of our packages with:
 
 ```{r, message = FALSE, include = FALSE}
 library(xml2)
@@ -36,6 +48,7 @@ library(tidyverse)
 library(sf)
 library(rnaturalearth)
 library(ggplot2)
+library(scrapex)
 ```
 
 Let's begin with a simple example. Below we define an XML structure and look at it's structure:
@@ -233,20 +246,11 @@ Once you've narrowed down your tree-based search to one single piece of text or 
 
 # Real world example
 
-We're interested in making a lists of many schools in Spain and visualizing their location. This can be useful for many things such as matching population density of childrens across different regions to school location of schools. The website `www.buscocolegio.com` contains a database of schools similar to what we're looking for. 
-
-However, we won't be scraping the data directly from their website. What would happen to this tutorial if 6 months from now `www.buscocolegio.com` updates the design of the website? Everything from our real world example would be lost. Scraping tutorials are usually very unstable precisely because of this. To circumvent that problem, I've saved a random sample of websites from some schools in `www.buscocolegio.com` into an R package called `scrapex`. Althought the links we'll be working on will be hosted locally on your machine, the HTML of the website is identical to the one hosted on the website. You can install the package with:
-
-```{r, eval = FALSE}
-# install.packages("devtools")
-devtools::install_github("cimentadaj/scrapex")
-```
+We're interested in making a lists of many schools in Spain and visualizing their location. This can be useful for many things such as matching population density of children across different regions to school locations. The website `www.buscocolegio.com` contains a database of schools similar to what we're looking for. As described at the beginning, instead we're going to use `spanish_schools_ex()` from the package `scrapex` which contains the links to a sample of websites from different schools locally.
 
 Let's look at one example for one school.
 
 ```{r}
-library(scrapex)
-
 school_links <- spanish_schools_ex()
 
 # Keep only the HTML file of one particular school.
@@ -255,7 +259,7 @@ school_url <- school_links[13]
 school_url
 ```
 
-If you're interested in looking at the website in your browser, you can do it with `browseURL(prep_browser(school_url))`. For this example we'll skip it since we will see images of the website down below. Let's read the HTML (XML and HTML are **usually** interchangeable, so here we use `read_html`).
+If you're interested in looking at the website in your interactively in your browser, you can do it with `browseURL(prep_browser(school_url))`. Let's read the HTML (XML and HTML are **usually** interchangeable, so here we use `read_html`).
 
 ```{r}
 # Here we use `read_html` because `read_xml` is throwing an error
@@ -266,7 +270,7 @@ school_raw <- read_html(school_url) %>% xml_child()
 school_raw
 ```
 
-Web scraping is a very specific to the website you're after. You have to get very familiar with it to be able to match perfectly the information you're looking for. In many cases, scraping two websites will require vastly different strategies. For this particular example, we're only interested in figuring out the **location** of each school so we only have to extract it's location. 
+Web scraping is very specific to the website you're after. You have to get very familiar with it to be able to match perfectly the information you're looking for. In many cases, scraping two websites will require vastly different strategies. For this particular example, we're only interested in figuring out the **location** of each school so we only have to extract it's location. 
 
 ```{r, echo = FALSE, out.width = 3000}
 knitr::include_graphics("./buscocolegios_xml/main_page.png")
@@ -416,8 +420,13 @@ school_grabber(school_url)
 
 Ok, so it's working. The only thing left is extract this for many schools. As shown earlier, `scrapex` contains a list of 27 school links that we can automatically scrape. Let's loop over those, get the information of coordinates for each and collapse all of them into a data frame.
 
-```{r, cache = TRUE}
+```{r, eval = FALSE}
 res <- map_dfr(school_links, school_grabber)
+res
+```
+
+```{r, echo = FALSE}
+res <- read.csv("./school_coordinates.csv")
 res
 ```
 
@@ -448,7 +457,6 @@ There we go! We went from literally no information at the beginning of this tuto
 * Some websites are supported by very big servers, which means you can send 4-5 website requests per second. Others, such as `www.buscocolegio.com` are not. It's good practice to always put a time sleep between your requests. In our example, I set it to 5 seconds because this is a small website and we don't want to crash their servers.
 
 * When making requests, there are computational ways of identifying yourself. For example, every request (such as the one's we do) can have something called a `User-Agent`. It is good practice to include yourself in as the `User-Agent` (as we did in our code) because the admin of the server can directly identify if someone's causing problem due to their web scraping.
-
 
 You can read more about these ethical issues [here](http://robertorocha.info/on-the-ethics-of-web-scraping/).
 
